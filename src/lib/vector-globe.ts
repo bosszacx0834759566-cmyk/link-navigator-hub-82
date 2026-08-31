@@ -46,7 +46,17 @@ function landPolygons(): Ring[][] {
       g.type === 'Polygon'
         ? [g.coordinates as number[][][]]
         : (g.coordinates as number[][][][]);
-    for (const poly of polys) polygons.push(poly.map((r) => unwrap(r as Ring)));
+    for (const poly of polys) {
+      const unwrapped = poly.map((r) => unwrap(r as Ring));
+      // an unwrapped polygon can now run past ±180 — cut it into pieces that
+      // each live inside a single lon range so planar triangulation stays sane
+      for (const shift of [-360, 0, 360]) {
+        const pieces = unwrapped
+          .map((r) => clipLon(r.map(([lo, la]) => [lo + shift, la] as [number, number])))
+          .filter((r) => r.length >= 3);
+        if (pieces.length && pieces[0]!.length >= 3) polygons.push(pieces as Ring[]);
+      }
+    }
   }
   return polygons;
 }
@@ -72,6 +82,33 @@ function unwrap(ring: Ring): Ring {
   // an unwrap that spans the whole globe means the ring encircles a pole
   // (Antarctica): leave those raw, the unwrapped form self-intersects
   if (Math.max(...lons) - Math.min(...lons) > 355) return ring;
+  return out;
+}
+
+/** Sutherland–Hodgman clip of a ring to the lon range [-180, 180]. */
+function clipLon(ring: Ring): Ring {
+  let out = ring;
+  for (const [sign, limit] of [
+    [1, 180],
+    [-1, 180],
+  ] as const) {
+    const inside = (p: [number, number]) => sign * p[0] <= limit;
+    const next: Ring = [];
+    for (let i = 0; i < out.length; i++) {
+      const a = out[i]!;
+      const b = out[(i + 1) % out.length]!;
+      const ai = inside(a);
+      const bi = inside(b);
+      if (ai) next.push(a);
+      if (ai !== bi) {
+        const target = sign * limit;
+        const t = (target - a[0]) / (b[0] - a[0]);
+        next.push([target, a[1] + (b[1] - a[1]) * t]);
+      }
+    }
+    out = next;
+    if (!out.length) return out;
+  }
   return out;
 }
 
