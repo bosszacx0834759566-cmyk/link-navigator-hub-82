@@ -28,14 +28,23 @@ export function llToVec(lon: number, lat: number, r = 1): THREE.Vector3 {
 }
 
 function landRings(): Ring[] {
-  const geo = feature(landTopo as never, (landTopo as never as { objects: { land: unknown } }).objects.land as never) as unknown as {
-    geometry: { type: string; coordinates: number[][][] | number[][][][] };
-  };
-  const g = geo.geometry;
-  const polys: number[][][][] =
-    g.type === 'Polygon' ? [g.coordinates as number[][][]] : (g.coordinates as number[][][][]);
+  const topo = landTopo as unknown as { objects: Record<string, never> };
+  const out = feature(topo as never, topo.objects['land'] as never) as unknown as
+    | { type: 'Feature'; geometry: { type: string; coordinates: unknown } }
+    | { type: 'FeatureCollection'; features: { geometry: { type: string; coordinates: unknown } }[] };
+
+  const geoms =
+    'features' in out ? out.features.map((f) => f.geometry) : [out.geometry];
+
   const rings: Ring[] = [];
-  for (const poly of polys) for (const ring of poly) rings.push(ring as Ring);
+  for (const g of geoms) {
+    if (!g) continue;
+    const polys: number[][][][] =
+      g.type === 'Polygon'
+        ? [g.coordinates as number[][][]]
+        : (g.coordinates as number[][][][]);
+    for (const poly of polys) for (const ring of poly) rings.push(ring as Ring);
+  }
   return rings;
 }
 
