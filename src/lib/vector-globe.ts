@@ -28,7 +28,11 @@ export function llToVec(lon: number, lat: number, r = 1): THREE.Vector3 {
 }
 
 function landRings(): Ring[] {
-  const topo = landTopo as unknown as { objects: Record<string, never> };
+  const mod = landTopo as unknown as { default?: unknown; objects?: unknown };
+  // SSR and browser bundlers disagree on JSON default-interop — accept both
+  const topo = (mod.objects ? mod : (mod.default as typeof mod)) as unknown as {
+    objects: Record<string, never>;
+  };
   const out = feature(topo as never, topo.objects['land'] as never) as unknown as
     | { type: 'Feature'; geometry: { type: string; coordinates: unknown } }
     | { type: 'FeatureCollection'; features: { geometry: { type: string; coordinates: unknown } }[] };
@@ -74,7 +78,7 @@ export function coastlineGeometry(radius = 1.002): THREE.BufferGeometry {
  * until its edges are short enough that projecting the corners onto the sphere
  * no longer cuts visibly through the surface.
  */
-export function landGeometry(radius = 1.001, maxEdgeDeg = 5): THREE.BufferGeometry {
+export function landGeometry(radius = 1.001, maxEdgeDeg = 8): THREE.BufferGeometry {
   const pos: number[] = [];
 
   const emit = (
