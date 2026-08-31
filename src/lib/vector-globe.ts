@@ -27,7 +27,7 @@ export function llToVec(lon: number, lat: number, r = 1): THREE.Vector3 {
   );
 }
 
-function landRings(): Ring[] {
+function landPolygons(): Ring[][] {
   const mod = landTopo as unknown as { default?: unknown; objects?: unknown };
   // SSR and browser bundlers disagree on JSON default-interop — accept both
   const topo = (mod.objects ? mod : (mod.default as typeof mod)) as unknown as {
@@ -40,19 +40,40 @@ function landRings(): Ring[] {
   const geoms =
     'features' in out ? out.features.map((f) => f.geometry) : [out.geometry];
 
-  const rings: Ring[] = [];
+  const polygons: Ring[][] = [];
   for (const g of geoms) {
     if (!g) continue;
     const polys: number[][][][] =
       g.type === 'Polygon'
         ? [g.coordinates as number[][][]]
         : (g.coordinates as number[][][][]);
-    for (const poly of polys) for (const ring of poly) rings.push(ring as Ring);
+    for (const poly of polys) polygons.push(poly.map((r) => unwrap(r as Ring)));
   }
-  return rings;
+  return polygons;
 }
 
-const RINGS = landRings();
+/**
+ * Rings that straddle the antimeridian arrive with longitudes jumping between
+ * -180 and +180, which breaks planar triangulation. Unwrapping them into a
+ * continuous range keeps the polygon simple; llToVec accepts lon > 180.
+ */
+function unwrap(ring: Ring): Ring {
+  const out: Ring = [];
+  let prev: number | null = null;
+  for (const [lon, lat] of ring) {
+    let l = lon;
+    if (prev !== null) {
+      while (l - prev > 180) l -= 360;
+      while (prev - l > 180) l += 360;
+    }
+    prev = l;
+    out.push([l, lat]);
+  }
+  return out;
+}
+
+const POLYGONS = landPolygons();
+const RINGS: Ring[] = POLYGONS.flat();
 
 /* ------------------------------------------------------------ coastlines */
 
@@ -109,19 +130,27 @@ export function landGeometry(radius = 1.001, maxEdgeDeg = 8): THREE.BufferGeomet
     }
   };
 
-  for (const ring of RINGS) {
-    const pts = ring.slice(0, -1).map(([lon, lat]) => new THREE.Vector2(lon, lat));
-    if (pts.length < 3) continue;
+  const toPts = (ring: Ring) =>
+    ring.slice(0, -1).map(([lon, lat]) => new THREE.Vector2(lon, lat));
+
+  for (const poly of POLYGONS) {
+    const outer = toPts(poly[0]!);
+    if (outer.length < 3) continue;
+    // inner rings are lakes / voids — cut them out instead of filling them
+    const holes = poly.slice(1).map(toPts).filter((h) => h.length >= 3);
+    const all = [outer, ...holes];
     let tris: number[][] = [];
     try {
-      tris = THREE.ShapeUtils.triangulateShape(pts, []);
+      tris = THREE.ShapeUtils.triangulateShape(outer, holes);
     } catch {
       continue;
     }
+    const flat = all.flat();
     for (const [i, j, k] of tris) {
-      const a = pts[i!]!;
-      const b = pts[j!]!;
-      const c = pts[k!]!;
+      const a = flat[i!];
+      const b = flat[j!];
+      const c = flat[k!];
+      if (!a || !b || !c) continue;
       emit([a.x, a.y], [b.x, b.y], [c.x, c.y], 0);
     }
   }
