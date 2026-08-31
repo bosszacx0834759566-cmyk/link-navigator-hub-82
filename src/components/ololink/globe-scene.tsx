@@ -244,7 +244,7 @@ function Earth() {
 
       {/* continents */}
       <mesh geometry={land}>
-        <meshBasicMaterial color="#1f4d3d" toneMapped={false} />
+        <meshBasicMaterial color="#1f4d3d" toneMapped={false} side={THREE.DoubleSide} />
       </mesh>
 
       {/* graticule */}

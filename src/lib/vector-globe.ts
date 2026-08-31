@@ -69,6 +69,10 @@ function unwrap(ring: Ring): Ring {
     prev = l;
     out.push([l, lat]);
   }
+  const lons = out.map((c) => c[0]);
+  // an unwrap that spans the whole globe means the ring encircles a pole
+  // (Antarctica): leave those raw, the unwrapped form self-intersects
+  if (Math.max(...lons) - Math.min(...lons) > 355) return ring;
   return out;
 }
 
