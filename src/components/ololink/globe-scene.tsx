@@ -14,8 +14,7 @@ import {
 } from 'react';
 import * as THREE from 'three';
 
-import { EARTH_8K_URL, EARTH_TILE_BY_REGION, type EarthTile } from '@/lib/earth-textures';
-import earthClouds from '@/assets/earth_clouds_1024.png';
+import { coastlineGeometry, graticuleGeometry, landGeometry } from '@/lib/vector-globe';
 
 import {
   ASSET_BY_ID,
@@ -245,17 +244,15 @@ function Earth() {
 
       {/* continents */}
       <mesh geometry={land}>
-        <meshBasicMaterial color="#12场" toneMapped={false} />
+        <meshBasicMaterial color="#1f4d3d" toneMapped={false} />
       </mesh>
 
       {/* graticule */}
-      {/* @ts-expect-error three line primitive */}
       <lineSegments geometry={grid}>
         <lineBasicMaterial color="#4a86c8" transparent opacity={0.12} depthWrite={false} />
       </lineSegments>
 
       {/* coastlines */}
-      {/* @ts-expect-error three line primitive */}
       <lineSegments geometry={coast}>
         <lineBasicMaterial color="#7dd3fc" transparent opacity={0.55} depthWrite={false} />
       </lineSegments>
