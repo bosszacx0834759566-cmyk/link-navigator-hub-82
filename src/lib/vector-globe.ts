@@ -1,8 +1,7 @@
 /**
  * Procedural / vector Earth geometry — no imagery, no textures.
  *
- * Built once at module level from the public-domain Natural Earth 110m land
- * outlines (world-atlas, ~55 kB JSON, bundled at build time). Everything the
+ * Built once at module level from the public-domain Natural Earth 110m country outlines (world-atlas, ~55 kB JSON, bundled at build time). Everything the
  * globe renders is generated geometry: filled land shells, coastline strokes
  * and a lat/lon graticule. This keeps the first paint instant and the frame
  * cost tiny compared with multi-megabyte equirectangular textures.
@@ -10,7 +9,7 @@
 
 import * as THREE from 'three';
 import { feature } from 'topojson-client';
-import landTopo from 'world-atlas/land-110m.json';
+import landTopo from 'world-atlas/countries-110m.json';
 
 type Ring = [number, number][];
 
@@ -33,7 +32,7 @@ function landPolygons(): Ring[][] {
   const topo = (mod.objects ? mod : (mod.default as typeof mod)) as unknown as {
     objects: Record<string, never>;
   };
-  const out = feature(topo as never, topo.objects['land'] as never) as unknown as
+  const out = feature(topo as never, topo.objects['countries'] as never) as unknown as
     | { type: 'Feature'; geometry: { type: string; coordinates: unknown } }
     | { type: 'FeatureCollection'; features: { geometry: { type: string; coordinates: unknown } }[] };
 
