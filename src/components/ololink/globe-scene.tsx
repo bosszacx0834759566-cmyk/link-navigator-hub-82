@@ -216,112 +216,50 @@ function curveForSegment(segment: Segment) {
 /** Direction of the sun — chosen so the terminator crosses both regions. */
 export const SUN_DIR = new THREE.Vector3(...geoToVec(14, 178, 0)).normalize();
 
-const DEG = Math.PI / 180;
-
 /**
- * Sharpens a texture for close-up viewing without inflating GPU memory:
- * trilinear mipmapping (so the 8K map does not shimmer when zoomed out) plus
- * hardware anisotropic filtering (so it stays crisp at grazing angles).
+ * Fully procedural / vector Earth — ocean shell, generated continent fills,
+ * coastline strokes and a lat/lon graticule. No imagery, no textures, so the
+ * scene paints immediately and stays smooth on low-end GPUs.
  */
-function tuneEarthTexture(tex: THREE.Texture, maxAniso: number, srgb = true) {
-  if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
-  tex.generateMipmaps = true;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.anisotropy = Math.min(8, maxAniso);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-/**
- * Native-resolution imagery patch laid over the 8K globe for the region the
- * camera is looking at. Only one tile is ever resident, so the extra GPU cost
- * is a single ~3k x 1.4k texture.
- */
-function RegionTile({ tile }: { tile: EarthTile }) {
-  const gl = useThree((s) => s.gl);
-  const map = useLoader(THREE.TextureLoader, tile.url);
-  useMemo(() => tuneEarthTexture(map, gl.capabilities.getMaxAnisotropy()), [map, gl]);
-
-  const args = useMemo(
-    () =>
-      [
-        1,
-        96,
-        96,
-        (tile.lonMin + 180) * DEG,
-        (tile.lonMax - tile.lonMin) * DEG,
-        (90 - tile.latMax) * DEG,
-        (tile.latMax - tile.latMin) * DEG,
-      ] as const,
-    [tile]
-  );
-
-  return (
-    <mesh scale={1.0006} renderOrder={1}>
-      <sphereGeometry args={[...args]} />
-      <meshBasicMaterial
-        map={map}
-        toneMapped={false}
-        color="#ffffff"
-        polygonOffset
-        polygonOffsetFactor={-1}
-      />
-    </mesh>
-  );
-}
-
 function Earth() {
-  const gl = useThree((s) => s.gl);
-  const { level, region } = useLod();
-  const maps = useLoader(THREE.TextureLoader, [EARTH_8K_URL, earthClouds]);
-  const day = maps[0]!;
-  const clouds = maps[1]!;
+  const land = useMemo(() => landGeometry(1.001), []);
+  const coast = useMemo(() => coastlineGeometry(1.0025), []);
+  const grid = useMemo(() => graticuleGeometry(1.004, 15), []);
 
-  useMemo(() => {
-    const maxAniso = gl.capabilities.getMaxAnisotropy();
-    tuneEarthTexture(day, maxAniso);
-    tuneEarthTexture(clouds, maxAniso, false);
-  }, [day, clouds, gl]);
-
-  /** regional + local views get the native-resolution imagery tile */
-  const tile = level !== 'global' && region ? EARTH_TILE_BY_REGION[region] : undefined;
-
-  const cloudRef = useRef<THREE.Mesh>(null);
-  useFrame((_, d) => {
-    if (cloudRef.current) cloudRef.current.rotation.y += d * 0.004;
-  });
+  useEffect(
+    () => () => {
+      land.dispose();
+      coast.dispose();
+      grid.dispose();
+    },
+    [land, coast, grid]
+  );
 
   return (
     <group>
-      {/* surface: NASA Blue Marble albedo, unlit so the whole globe is evenly visible */}
+      {/* ocean shell */}
       <mesh>
-        <sphereGeometry args={[1, 128, 128]} />
-        <meshBasicMaterial map={day} toneMapped={false} color="#ffffff" />
-      </mesh>
-
-      {/* high-resolution regional imagery */}
-      {tile ? (
-        <Suspense fallback={null}>
-          <RegionTile tile={tile} />
-        </Suspense>
-      ) : null}
-
-
-      {/* cloud layer */}
-      <mesh ref={cloudRef} scale={1.006}>
         <sphereGeometry args={[1, 96, 96]} />
-        <meshBasicMaterial
-          map={clouds}
-          alphaMap={clouds}
-          transparent
-          opacity={0.42}
-          depthWrite={false}
-          toneMapped={false}
-          color="#ffffff"
-        />
+        <meshBasicMaterial color="#0a2038" toneMapped={false} />
       </mesh>
+
+      {/* continents */}
+      <mesh geometry={land}>
+        <meshBasicMaterial color="#12场" toneMapped={false} />
+      </mesh>
+
+      {/* graticule */}
+      {/* @ts-expect-error three line primitive */}
+      <lineSegments geometry={grid}>
+        <lineBasicMaterial color="#4a86c8" transparent opacity={0.12} depthWrite={false} />
+      </lineSegments>
+
+      {/* coastlines */}
+      {/* @ts-expect-error three line primitive */}
+      <lineSegments geometry={coast}>
+        <lineBasicMaterial color="#7dd3fc" transparent opacity={0.55} depthWrite={false} />
+      </lineSegments>
+
       {/* inner atmosphere */}
       <mesh>
         <sphereGeometry args={[1.016, 64, 64]} />
@@ -334,6 +272,7 @@ function Earth() {
       </mesh>
     </group>
   );
+
 }
 
 
