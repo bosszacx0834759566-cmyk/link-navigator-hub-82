@@ -1,6 +1,6 @@
 'use client';
 
-import { Canvas, useFrame, useLoader, useThree, type ThreeEvent } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 
 import { Html, OrbitControls, Stars } from '@react-three/drei';
 import {
